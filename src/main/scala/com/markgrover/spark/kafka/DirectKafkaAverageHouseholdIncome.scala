@@ -8,7 +8,7 @@ object DirectKafkaAverageHouseholdIncome {
 
     val conf = new SparkConf().setMaster("local[2]").setAppName(this.getClass.toString)
     val ssc = new StreamingContext(conf, Seconds(1))
-    val hdfsPath = "hdfs:///user/hive/warehouse/income"
+    val hdfsPath = "hdfs:///user/hive/warehouse/income/"
     val incomeCsv = ssc.textFileStream(hdfsPath)
     // Format of the data is
     //GEO.id,GEO.id2,GEO.display-label,VD01
@@ -25,6 +25,9 @@ object DirectKafkaAverageHouseholdIncome {
       .reduceByKey((x, y) => (x._1 + y._1, x._2 + y._2)).mapValues(divide)
 
     runningTotals.print(20)
+
+    ssc.start()
+    ssc.awaitTermination()
   }
 
   def divide(xy: (Int, Int)): Double = {
@@ -37,11 +40,15 @@ object DirectKafkaAverageHouseholdIncome {
   }
 
   def parse(incomeCsv: DStream[String]): DStream[List[String]] = {
+    println("here1")
     val builder = StringBuilder.newBuilder
+    println("here2")
     incomeCsv.map(x => {
+      println("here3")
       var result = List[String]()
       var withinQuotes = false
       x.foreach(c => {
+        println("here4")
         if (c.equals(',') && !withinQuotes) {
           result = result :+ builder.toString
           builder.clear()
@@ -52,6 +59,7 @@ object DirectKafkaAverageHouseholdIncome {
           builder.append(c)
         }
       })
+      println ("REsult just added:" + builder.toString)
       result :+ builder.toString
     })
   }
