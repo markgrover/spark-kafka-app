@@ -1,9 +1,8 @@
-import org.apache.spark.streaming.dstream.DStream
-
 object DirectKafkaAverageHouseholdIncome {
   import org.apache.spark.streaming.kafka._
   import org.apache.spark.{SparkConf,SparkContext}
   import org.apache.spark.streaming._
+  import org.apache.spark.streaming.dstream._
 
   val conf = new SparkConf().setMaster("local[2]").setAppName(this.getClass.toString)
   val ssc = new StreamingContext(conf, Seconds(1))
@@ -21,12 +20,17 @@ object DirectKafkaAverageHouseholdIncome {
   // First element of the tuple in DStream are total incomes, second is total number of zip codes
   // in that geographic area, for which the income is shown
   val runningTotals = areaIncomeStream.mapValues(x => (x, 1))
-    .reduceByKey((x,y) => (x._1 + y._1, x._2 + y._2)).mapValues(divide _.tupled)
+    .reduceByKey((x,y) => (x._1 + y._1, x._2 + y._2)).mapValues(divide)
 
   runningTotals.print(20)
 
-  def divide(x: Int, y: Int): Double = {
-    x/y
+  def divide(xy: (Int, Int)): Double = {
+    if (xy._2 == 0) {
+      0
+    } else {
+      xy._1/xy._2
+    }
+
   }
 
   def parse(incomeCsv: DStream[String]): DStream[List[String]] = {
