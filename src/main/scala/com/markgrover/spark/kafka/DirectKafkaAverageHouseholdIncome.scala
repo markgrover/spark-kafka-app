@@ -1,6 +1,7 @@
+package com.markgrover.spark.kafka
+
 object DirectKafkaAverageHouseholdIncome {
-  import org.apache.spark.streaming.kafka._
-  import org.apache.spark.{SparkConf,SparkContext}
+  import org.apache.spark.SparkConf
   import org.apache.spark.streaming._
   import org.apache.spark.streaming.dstream._
 
