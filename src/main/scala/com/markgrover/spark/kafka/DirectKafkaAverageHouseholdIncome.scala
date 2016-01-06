@@ -40,7 +40,7 @@ object DirectKafkaAverageHouseholdIncome {
     println("here1")
     val builder = StringBuilder.newBuilder
     println("here2")
-    val parsedCsv = incomeCsv.map(x => {
+    val parsedCsv: DStream[List[String]] = incomeCsv.map(x => {
       println("here3")
       var result = List[String]()
       var withinQuotes = false
