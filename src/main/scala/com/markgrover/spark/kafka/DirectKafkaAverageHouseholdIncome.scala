@@ -37,15 +37,11 @@ object DirectKafkaAverageHouseholdIncome {
   }
 
   def parse(incomeCsv: DStream[String]): DStream[(String, Int)] = {
-    println("here1")
     val builder = StringBuilder.newBuilder
-    println("here2")
     val parsedCsv: DStream[List[String]] = incomeCsv.map(x => {
-      println("here3")
       var result = List[String]()
       var withinQuotes = false
       x.foreach(c => {
-        println("here4")
         if (c.equals(',') && !withinQuotes) {
           result = result :+ builder.toString
           builder.clear()
@@ -56,7 +52,6 @@ object DirectKafkaAverageHouseholdIncome {
           builder.append(c)
         }
       })
-      println ("REsult just added:" + builder.toString)
       result :+ builder.toString
     })
     // 2nd element (index 1) is zip code, last element (index 3) is income
