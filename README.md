@@ -6,7 +6,7 @@
 ````sudo -u hdfs hadoop fs -mkdir -p /user/hive/warehouse/income````
 
 ### Run
-````spark-submit --master yarn --deploy-mode client --class com.markgrover.spark.kafka.DirectKafkaAverageHouseholdIncome spark-kafka-app_2.10-0.1.0-SNAPSHOT.jar > ~/a.out 2>&1````
+````spark-submit --master yarn --deploy-mode client --class com.markgrover.spark.kafka.DirectKafkaAverageHouseholdIncome spark-kafka-app_2.10-0.1.0-SNAPSHOT.jar````
 
 ### To "stream" the data from HDFS once the app is running
 ````
