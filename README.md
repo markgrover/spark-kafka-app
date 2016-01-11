@@ -4,6 +4,7 @@
 
 ### HDFS setup
 ````sudo -u hdfs hadoop fs -mkdir -p /user/hive/warehouse/income````
+````sudo -u hdfs hadoop fs -mkdir -p /user/$USER || :````
 
 ### Run
 ````spark-submit --master yarn --deploy-mode client --class com.markgrover.spark.kafka.DirectKafkaAverageHouseholdIncome spark-kafka-app_2.10-0.1.0-SNAPSHOT.jar````
