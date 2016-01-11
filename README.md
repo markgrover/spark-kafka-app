@@ -11,7 +11,12 @@ sudo -u hdfs hadoop fs -mkdir -p /user/$USER || :
 </pre>
 
 ### Run
-````spark-submit --master yarn --deploy-mode client --class com.markgrover.spark.kafka.DirectKafkaAverageHouseholdIncome spark-kafka-app_2.10-0.1.0-SNAPSHOT.jar````
+<pre>
+<code>
+spark-submit --master yarn --deploy-mode client --class \
+com.markgrover.spark.kafka.DirectKafkaAverageHouseholdIncome spark-kafka-app_2.10-0.1.0-SNAPSHOT.jar
+</pre>
+</code>
 
 ### To "stream" the data from HDFS once the app is running
 ````
