@@ -1,6 +1,8 @@
 package com.markgrover.spark.kafka
 
 import org.apache.spark.streaming.dstream._
+import org.apache.spark.streaming.kafka.v09.KafkaUtils
+
 object DirectKafkaAverageHouseholdIncome {
   def main(args: Array[String]) {
     import org.apache.spark.SparkConf
@@ -9,7 +11,12 @@ object DirectKafkaAverageHouseholdIncome {
     val conf = new SparkConf().setAppName(this.getClass.toString)
     val ssc = new StreamingContext(conf, Seconds(1))
     val hdfsPath = "/user/hive/warehouse/income"
-    val incomeCsv = ssc.textFileStream(hdfsPath)
+    val kafkaParams: Map[String, String] = Map("auto.offset.reset" -> "earliest",
+      "bootstrap.servers" -> "mgrover-st-1.vpc.cloudera.com")
+
+    val incomeCsv = KafkaUtils.createDirectStream[String, String](ssc, kafkaParams, Set("income"))
+    //val incomeCsv = ssc.textFileStream(hdfsPath)
+
     // Format of the data is
     //GEO.id,GEO.id2,GEO.display-label,VD01
     //Id,Id2,Geography,Median family income in 1999
@@ -36,9 +43,10 @@ object DirectKafkaAverageHouseholdIncome {
 
   }
 
-  def parse(incomeCsv: DStream[String]): DStream[(String, Int)] = {
+  def parse(incomeCsv: DStream[(String, String)]): DStream[(String, Int)] = {
     val builder = StringBuilder.newBuilder
-    val parsedCsv: DStream[List[String]] = incomeCsv.map(x => {
+    val parsedCsv: DStream[List[String]] = incomeCsv.map(entry => {
+      val x = entry._2
       var result = List[String]()
       var withinQuotes = false
       x.foreach(c => {
