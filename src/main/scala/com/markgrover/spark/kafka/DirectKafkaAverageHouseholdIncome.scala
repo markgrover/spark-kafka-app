@@ -12,7 +12,7 @@ object DirectKafkaAverageHouseholdIncome {
     val ssc = new StreamingContext(conf, Seconds(1))
     val hdfsPath = "/user/hive/warehouse/income"
     val kafkaParams: Map[String, String] = Map("auto.offset.reset" -> "earliest",
-      "bootstrap.servers" -> "mgrover-st-1.vpc.cloudera.com",
+      "bootstrap.servers" -> "mgrover-st-1.vpc.cloudera.com:9092",
       "key.deserializer" -> "org.apache.kafka.common.serialization.StringDeserializer",
       "value.deserializer" -> "org.apache.kafka.common.serialization.StringDeserializer")
 
