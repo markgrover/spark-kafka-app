@@ -1,9 +1,17 @@
 package com.markgrover.spark.kafka
 
+import org.apache.hadoop.io.{Text, LongWritable}
+import org.apache.hadoop.mapreduce.lib.input.TextInputFormat
 import org.apache.spark.streaming.dstream._
 import org.apache.spark.streaming.kafka.v09.KafkaUtils
 
 object DirectKafkaAverageHouseholdIncome {
+
+  object Mode extends Enumeration {
+    type mode = Value
+    val KAFKA, TEXT = Value
+  }
+
   def main(args: Array[String]) {
     import org.apache.spark.SparkConf
     import org.apache.spark.streaming._
@@ -16,8 +24,25 @@ object DirectKafkaAverageHouseholdIncome {
       "key.deserializer" -> "org.apache.kafka.common.serialization.StringDeserializer",
       "value.deserializer" -> "org.apache.kafka.common.serialization.StringDeserializer")
 
-    val incomeCsv = KafkaUtils.createDirectStream[String, String](ssc, kafkaParams, Set("income"))
-    //val incomeCsv = ssc.textFileStream(hdfsPath)
+    // Default mode is Kafka
+    var mode = Mode.KAFKA
+
+    // If the optional first argument is passed, that represents the mode (case-insensitive)
+    if (args.length > 0) {
+      try {
+        mode = Mode.withName(args(0).toUpperCase())
+      } catch {
+        case e: java.util.NoSuchElementException => throw new IllegalArgumentException(s"Unknown " +
+          s"mode (${args(0)})detected. Available modes are ${Mode.values.mkString(", ")}.")
+      }
+    }
+
+    val incomeCsv: DStream[(String, String)] = mode match {
+      case Mode.KAFKA => KafkaUtils.createDirectStream[String, String](ssc, kafkaParams, Set
+        ("income"))
+      case Mode.TEXT => ssc.fileStream[LongWritable, Text, TextInputFormat](hdfsPath).map(kv =>
+        (kv._1.toString, kv._2.toString))
+    }
 
     // Format of the data is
     //GEO.id,GEO.id2,GEO.display-label,VD01
@@ -40,7 +65,7 @@ object DirectKafkaAverageHouseholdIncome {
     if (xy._2 == 0) {
       0
     } else {
-      xy._1/xy._2
+      xy._1 / xy._2
     }
 
   }
