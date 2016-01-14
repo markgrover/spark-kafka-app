@@ -1,4 +1,7 @@
 # spark-kafka-app
+### Introduction
+This is an application that uses Spark Streaming to read data from Kafka or an HDFS text file (you can choose) to calculate the average income per geographical region in the US. A small data file is also provided with this repo. You also have the option of choosing to use Kafka v08 or Kafka v09 consumer APIs (Kafka v09 introduced new consumer APIs).
+
 ### Pre-requisites
 For this application, you'd need a Kafka cluster (which in turn requires zookeeper), and a Hadoop cluster with Spark installed on it.
 
