@@ -1,10 +1,13 @@
 package com.markgrover.spark.kafka
 
+import scala.collection
 import kafka.serializer.StringDecoder
 import org.apache.hadoop.io.{Text, LongWritable}
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat
 import org.apache.spark.streaming.StreamingContext
 import org.apache.spark.streaming.dstream._
+
+import scala.collection.mutable
 
 object DirectKafkaAverageHouseholdIncome {
 
@@ -25,10 +28,10 @@ object DirectKafkaAverageHouseholdIncome {
     val conf = new SparkConf().setAppName(this.getClass.toString)
     val ssc = new StreamingContext(conf, Seconds(1))
     val hdfsPath = "/user/hive/warehouse/income"
-    val kafkaParams: Map[String, String] = Map("auto.offset.reset" -> "earliest",
-      "bootstrap.servers" -> "mgrover-st-1.vpc.cloudera.com:9092",
-      "key.deserializer" -> "org.apache.kafka.common.serialization.StringDeserializer",
-      "value.deserializer" -> "org.apache.kafka.common.serialization.StringDeserializer")
+    val kafkaParams: scala.collection.mutable.Map[String, String] = new mutable.HashMap[String, String]()
+    kafkaParams.update("bootstrap.servers", "mgrover-st-1.vpc.cloudera.com:9092")
+    kafkaParams.update("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
+    kafkaParams.update("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
 
     // Default mode is Kafka
     var mode = Mode.KAFKA
@@ -47,8 +50,8 @@ object DirectKafkaAverageHouseholdIncome {
     }
 
     // If the optional second argument is passed, that represents the version of Kafka Client API to
-    // use.
-    if (args.length > 1) {
+    // use. If Kafka mode is not used, the second argument is simply ignored.
+    if ((mode == Mode.KAFKA) && (args.length > 1)) {
       val arg = args(1)
       try {
         clientVersion = KafkaClientVersion.withName(arg.toUpperCase())
@@ -65,10 +68,6 @@ object DirectKafkaAverageHouseholdIncome {
         (kv._1.toString, kv._2.toString))
     }
 
-    // Format of the data is
-    //GEO.id,GEO.id2,GEO.display-label,VD01
-    //Id,Id2,Geography,Median family income in 1999
-    //8600000US998HH,998HH,"998HH 5-Digit ZCTA, 998 3-Digit ZCTA",0
     val areaIncomeStream = parse(incomeCsv)
 
     // First element of the tuple in DStream are total incomes, second is total number of zip codes
@@ -82,15 +81,17 @@ object DirectKafkaAverageHouseholdIncome {
     ssc.awaitTermination()
   }
 
-  def createVersionSpecificDirectStream(ssc: StreamingContext, kafkaParams: Map[String, String], clientVersion:
+  def createVersionSpecificDirectStream(ssc: StreamingContext, kafkaParams: scala.collection.mutable.Map[String, String], clientVersion:
   KafkaClientVersion.Value): InputDStream[(String, String)] = {
     if (clientVersion == KafkaClientVersion.V09) {
+      kafkaParams.update("auto.offset.reset", "earliest")
       org.apache.spark.streaming.kafka.v09.KafkaUtils.createDirectStream[String, String](ssc,
-        kafkaParams, Set("income"))
+        kafkaParams.toMap, Set("income"))
 
     } else if (clientVersion == KafkaClientVersion.V08) {
+      kafkaParams.update("auto.offset.reset", "smallest")
       org.apache.spark.streaming.kafka.KafkaUtils.createDirectStream[String, String,
-        StringDecoder, StringDecoder](ssc, kafkaParams, Set("income"))
+        StringDecoder, StringDecoder](ssc, kafkaParams.toMap, Set("income"))
     } else {
       throw new UnsupportedOperationException(s"client version ($clientVersion) is unsupported.")
     }
@@ -105,6 +106,25 @@ object DirectKafkaAverageHouseholdIncome {
 
   }
 
+  /**
+   * Parse the input DStream of tuples into a new output DStream of tuples.
+   * The first element of the input DStream's tuple is the row number, as set by the input source
+   * (like TextStream or Kafka) and is ignored. The second element of the input DStream's tuple
+   * is the actual record. This record is in CSV format, read as-it-is from the accompanying data
+   * file with this code repo.
+   * The first element of output tuple is a geographic region which is represented by the first 3
+   * digits of the zip code. The second is the income of a subset within that region. This subset is
+   * represented by an exact 5 digit zipcode. However, we prune the zipcode down to 3 digits in the
+   * output so we can do aggregations based on 3-digit regions.
+   * Format of the data is
+   * GEO.id,GEO.id2,GEO.display-label,VD01
+   * Id,Id2,Geography,Median family income in 1999
+   * Example row:
+   * 8600000US998HH,998HH,"998HH 5-Digit ZCTA, 998 3-Digit ZCTA",0
+   *
+   * @param incomeCsv
+   * @return
+   */
   def parse(incomeCsv: DStream[(String, String)]): DStream[(String, Int)] = {
     val builder = StringBuilder.newBuilder
     val parsedCsv: DStream[List[String]] = incomeCsv.map(entry => {
