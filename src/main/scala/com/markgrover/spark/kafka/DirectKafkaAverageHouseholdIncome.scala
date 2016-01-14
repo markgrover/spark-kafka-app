@@ -1,15 +1,21 @@
 package com.markgrover.spark.kafka
 
+import kafka.serializer.StringDecoder
 import org.apache.hadoop.io.{Text, LongWritable}
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat
+import org.apache.spark.streaming.StreamingContext
 import org.apache.spark.streaming.dstream._
-import org.apache.spark.streaming.kafka.v09.KafkaUtils
 
 object DirectKafkaAverageHouseholdIncome {
 
   object Mode extends Enumeration {
     type mode = Value
     val KAFKA, TEXT = Value
+  }
+
+  object KafkaClientVersion extends Enumeration {
+    type version = Value
+    val V08, V09 = Value
   }
 
   def main(args: Array[String]) {
@@ -26,20 +32,35 @@ object DirectKafkaAverageHouseholdIncome {
 
     // Default mode is Kafka
     var mode = Mode.KAFKA
+    // Default client version we are going to use v09.
+    var clientVersion = KafkaClientVersion.V09
 
     // If the optional first argument is passed, that represents the mode (case-insensitive)
     if (args.length > 0) {
+      val arg = args(0)
       try {
-        mode = Mode.withName(args(0).toUpperCase())
+        mode = Mode.withName(arg.toUpperCase())
       } catch {
         case e: java.util.NoSuchElementException => throw new IllegalArgumentException(s"Unknown " +
-          s"mode (${args(0)})detected. Available modes are ${Mode.values.mkString(", ")}.")
+          s"mode (${arg})detected. Available modes are ${Mode.values.mkString(", ")}.")
+      }
+    }
+
+    // If the optional second argument is passed, that represents the version of Kafka Client API to
+    // use.
+    if (args.length > 1) {
+      val arg = args(1)
+      try {
+        clientVersion = KafkaClientVersion.withName(arg.toUpperCase())
+      } catch {
+        case e: java.util.NoSuchElementException => throw new IllegalArgumentException("Unknown " +
+          s"kafka client version (${arg})detected. Available kafka client versions are " +
+          s"${KafkaClientVersion.values.mkString(", ")}.")
       }
     }
 
     val incomeCsv: DStream[(String, String)] = mode match {
-      case Mode.KAFKA => KafkaUtils.createDirectStream[String, String](ssc, kafkaParams, Set
-        ("income"))
+      case Mode.KAFKA => createVersionSpecificDirectStream(ssc, kafkaParams, clientVersion)
       case Mode.TEXT => ssc.fileStream[LongWritable, Text, TextInputFormat](hdfsPath).map(kv =>
         (kv._1.toString, kv._2.toString))
     }
@@ -59,6 +80,20 @@ object DirectKafkaAverageHouseholdIncome {
 
     ssc.start()
     ssc.awaitTermination()
+  }
+
+  def createVersionSpecificDirectStream(ssc: StreamingContext, kafkaParams: Map[String, String], clientVersion:
+  KafkaClientVersion.Value): InputDStream[(String, String)] = {
+    if (clientVersion == KafkaClientVersion.V09) {
+      org.apache.spark.streaming.kafka.v09.KafkaUtils.createDirectStream[String, String](ssc,
+        kafkaParams, Set("income"))
+
+    } else if (clientVersion == KafkaClientVersion.V08) {
+      org.apache.spark.streaming.kafka.KafkaUtils.createDirectStream[String, String,
+        StringDecoder, StringDecoder](ssc, kafkaParams, Set("income"))
+    } else {
+      throw new UnsupportedOperationException(s"client version ($clientVersion) is unsupported.")
+    }
   }
 
   def divide(xy: (Int, Int)): Double = {
