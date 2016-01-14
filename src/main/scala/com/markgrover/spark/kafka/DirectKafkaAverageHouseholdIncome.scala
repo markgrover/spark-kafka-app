@@ -1,13 +1,13 @@
 package com.markgrover.spark.kafka
 
-import scala.collection
+import scala.collection.mutable
 import kafka.serializer.StringDecoder
 import org.apache.hadoop.io.{Text, LongWritable}
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat
+import org.apache.spark.SparkConf
 import org.apache.spark.streaming.StreamingContext
+import org.apache.spark.streaming._
 import org.apache.spark.streaming.dstream._
-
-import scala.collection.mutable
 
 object DirectKafkaAverageHouseholdIncome {
 
@@ -22,45 +22,22 @@ object DirectKafkaAverageHouseholdIncome {
   }
 
   def main(args: Array[String]) {
-    import org.apache.spark.SparkConf
-    import org.apache.spark.streaming._
 
     val conf = new SparkConf().setAppName(this.getClass.toString)
     val ssc = new StreamingContext(conf, Seconds(1))
     val hdfsPath = "/user/hive/warehouse/income"
-    val kafkaParams: scala.collection.mutable.Map[String, String] = new mutable.HashMap[String, String]()
+    // Use a mutable map because the value of one of the properties depends on what version of Kafka
+    // client API is being used.
+    val kafkaParams: mutable.Map[String, String] = new mutable.HashMap[String, String]()
+    // We are not adding 'auto.offset.reset' just yet because its value depends on whate version
+    // of Kafka client API is being used.
     kafkaParams.update("bootstrap.servers", "mgrover-st-1.vpc.cloudera.com:9092")
-    kafkaParams.update("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
-    kafkaParams.update("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
+    kafkaParams.update("key.deserializer", "org.apache.kafka.common.serialization" +
+      ".StringDeserializer")
+    kafkaParams.update("value.deserializer", "org.apache.kafka.common.serialization" +
+      ".StringDeserializer")
 
-    // Default mode is Kafka
-    var mode = Mode.KAFKA
-    // Default client version we are going to use v09.
-    var clientVersion = KafkaClientVersion.V09
-
-    // If the optional first argument is passed, that represents the mode (case-insensitive)
-    if (args.length > 0) {
-      val arg = args(0)
-      try {
-        mode = Mode.withName(arg.toUpperCase())
-      } catch {
-        case e: java.util.NoSuchElementException => throw new IllegalArgumentException(s"Unknown " +
-          s"mode (${arg})detected. Available modes are ${Mode.values.mkString(", ")}.")
-      }
-    }
-
-    // If the optional second argument is passed, that represents the version of Kafka Client API to
-    // use. If Kafka mode is not used, the second argument is simply ignored.
-    if ((mode == Mode.KAFKA) && (args.length > 1)) {
-      val arg = args(1)
-      try {
-        clientVersion = KafkaClientVersion.withName(arg.toUpperCase())
-      } catch {
-        case e: java.util.NoSuchElementException => throw new IllegalArgumentException("Unknown " +
-          s"kafka client version (${arg})detected. Available kafka client versions are " +
-          s"${KafkaClientVersion.values.mkString(", ")}.")
-      }
-    }
+    val (mode: Mode.Value, clientVersion: KafkaClientVersion.Value) = parseCommandLineArgs(args)
 
     val incomeCsv: DStream[(String, String)] = mode match {
       case Mode.KAFKA => createVersionSpecificDirectStream(ssc, kafkaParams, clientVersion)
@@ -81,7 +58,56 @@ object DirectKafkaAverageHouseholdIncome {
     ssc.awaitTermination()
   }
 
-  def createVersionSpecificDirectStream(ssc: StreamingContext, kafkaParams: scala.collection.mutable.Map[String, String], clientVersion:
+  /**
+   * Parses the command lines arguments and returns the mode (kafka vs. text) and if Kafka
+   * the Kafka client version to use.
+   * @param args
+   * @return
+   */
+  def parseCommandLineArgs (args: Array[String]): (Mode.Value, KafkaClientVersion.Value) = {
+    // Default mode is Kafka
+    var mode = Mode.KAFKA
+    // Default client version we are going to use v09.
+    var clientVersion = KafkaClientVersion.V09
+
+    // If the optional first argument is passed, that represents the mode (case-insensitive)
+    if (args.length > 0) {
+      val arg = args(0)
+      try {
+        mode = Mode.withName(arg.toUpperCase())
+      } catch {
+        case e: NoSuchElementException => throw new scala.IllegalArgumentException(s"Unknown " +
+          s"mode (${arg})detected. Available modes are ${Mode.values.mkString(", ")}.")
+      }
+    }
+
+    // If the optional second argument is passed, that represents the version of Kafka Client
+    // API to
+    // use. If Kafka mode is not used, the second argument is simply ignored.
+    if ((mode == Mode.KAFKA) && (args.length > 1)) {
+      val arg = args(1)
+      try {
+        clientVersion = KafkaClientVersion.withName(arg.toUpperCase())
+      } catch {
+        case e: NoSuchElementException => throw new scala.IllegalArgumentException("Unknown " +
+          s"kafka client version (${arg})detected. Available kafka client versions are " +
+          s"${KafkaClientVersion.values.mkString(", ")}.")
+      }
+    }
+    (mode, clientVersion)
+  }
+
+  /**
+   * Unfortunately, the acceptable values for 'auto.offset.reset' have changed between v08 and v09.
+   * v08 accepted 'smallest'/'largest', v09 accepts 'earliest'/'latest'
+   * @param ssc Streaming context
+   * @param kafkaParams Map contains the configuration parameters for Kafka
+   * @param clientVersion @KafkaClientVersion enumeration used for determining what Kafka Client
+   *                      API version to use.
+   * @return Raw input DStream read from Kafka
+   */
+  def createVersionSpecificDirectStream(ssc: StreamingContext, kafkaParams: mutable.Map[String,
+    String], clientVersion:
   KafkaClientVersion.Value): InputDStream[(String, String)] = {
     if (clientVersion == KafkaClientVersion.V09) {
       kafkaParams.update("auto.offset.reset", "earliest")
