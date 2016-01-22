@@ -42,7 +42,7 @@ Then, create new a topic named ```income```. The replication factor of 3 adds fa
 
 Then, put some data in the newly created ```income``` topic.
 
-```cat ./DEC_00_SF3_P077_with_ann.csv | kafka-console-producer --broker-list localhost:9092 --topic income```
+```cat ./DEC_00_SF3_P077_with_ann.csv | kafka-console-producer --broker-list ${HOSTNAME}:9092 --topic income```
 
 You can verify that the data has been by launching a console consumer. It's ok, you can re-read the data, our kafka app, always reads the data from the beginning:
 ```kafka-console-consumer --zookeeper localhost:2181 --topic income --from-beginning```
