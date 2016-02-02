@@ -46,7 +46,7 @@ Then, put some data in the newly created ```income``` topic.
 
 You can verify that the data has been by launching a console consumer. It's ok, you can re-read the data, our kafka app, always reads the data from the beginning:
 
-```kafka-console-consumer --zookeeper localhost:2181 --topic income --from-beginning```
+```kafka-console-consumer --zookeeper localhost:2181 --from-beginning --topic income```
 
 #### Option 2: To use a text file as a streaming source
 Log on to one of the nodes of the Hadoop cluster and run the following instructions to create a stream out of HDFS data. Start your streaming application *before* you run the steps below.
